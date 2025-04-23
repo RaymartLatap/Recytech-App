@@ -23,11 +23,11 @@ export default function TabLayout() {
     fetchUnreadCount();
 
     const subscription = supabase
-      .channel('public:notifications')
+      .channel('notifications-count')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications' },
-        () => fetchUnreadCount()
+        () => fetchUnreadCount() // re-fetch count on insert/update/delete
       )
       .subscribe();
 
@@ -86,7 +86,9 @@ export default function TabLayout() {
               <TabBarIcon name="bell" color={color} />
               {unreadCount > 0 && (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount}</Text>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
                 </View>
               )}
             </View>
@@ -116,3 +118,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
