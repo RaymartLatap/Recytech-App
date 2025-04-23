@@ -1,13 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Link, Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Pressable, View, Text, StyleSheet } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { supabase } from '@/utils/supabase';
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
@@ -16,18 +16,45 @@ function TabBarIcon(props: {
 }
 
 export default function TabLayout() {
+  const [unreadCount, setUnreadCount] = useState(0);
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    fetchUnreadCount();
+
+    const subscription = supabase
+      .channel('public:notifications')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications' },
+        () => fetchUnreadCount()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, []);
+
+  const fetchUnreadCount = async () => {
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('read', false);
+
+    if (typeof count === 'number') {
+      setUnreadCount(count);
+    }
+  };
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
         headerShown: useClientOnlyValue(false, true),
-      }}>
-
-      <Tabs.Screen name="index" options={{href: null}} />
+      }}
+    >
+      <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen
         name="dashboard"
         options={{
@@ -53,10 +80,39 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two"
         options={{
-          title: 'Trashbin',
-          tabBarIcon: ({ color }) => <TabBarIcon name="trash" color={color} />,
+          title: 'Notifications',
+          tabBarIcon: ({ color }) => (
+            <View>
+              <TabBarIcon name="bell" color={color} />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </View>
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+});

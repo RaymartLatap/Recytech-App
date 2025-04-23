@@ -1,76 +1,277 @@
-import React, { useState } from "react";
-import { View, Text, Dimensions, Alert } from "react-native";
-import { LineChart } from "react-native-chart-kit";
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  Dimensions,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+import { fetchGroupedCounts } from '@/utils/fetchGroupedCounts';
+import { downloadCSV } from '@/utils/downloadCSV'; // ✅ make sure this exists
+import { supabase } from '@/utils/supabase';
+import moment from 'moment';
 
-const screenWidth = Dimensions.get("window").width;
+const screenWidth = Dimensions.get('window').width;
+
+const rangeLabels = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+};
 
 const SummaryCharts: React.FC = () => {
-  const [selectedValue, setSelectedValue] = useState<string | null>(null);
+  const [range, setRange] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
+  const [chartData, setChartData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
-  const data = {
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    datasets: [
-      {
-        data: [5, 8, 6, 10, 7, 9, 10],
-        color: (opacity = 1) => `rgba(255, 99, 132, ${opacity})`,
-        strokeWidth: 2,
-      },
-      {
-        data: [4, 6, 7, 8, 5, 6, 9],
-        color: (opacity = 1) => `rgba(54, 162, 235, ${opacity})`,
-        strokeWidth: 2,
-      },
-      {
-        data: [3, 5, 4, 6, 5, 7, 8],
-        color: (opacity = 1) => `rgba(75, 192, 192, ${opacity})`,
-        strokeWidth: 2,
-      },
-    ],
-    legend: ["Paper", "Can", "PET Bottles"],
+  const fetchAllData = async () => {
+    setLoading(true);
+    try {
+      const [paper, can, pet] = await Promise.all([
+        fetchGroupedCounts('paper', range),
+        fetchGroupedCounts('can', range),
+        fetchGroupedCounts('pet bottle', range),
+      ]);
+
+      const labels = paper.map((entry) => entry.date);
+
+      setChartData({
+        labels,
+        datasets: [
+          {
+            data: paper.map((entry) => entry.count),
+            color: (opacity = 1) => `rgba(255, 99, 132, ${opacity})`,
+            strokeWidth: 2,
+          },
+          {
+            data: can.map((entry) => entry.count),
+            color: (opacity = 1) => `rgba(54, 162, 235, ${opacity})`,
+            strokeWidth: 2,
+          },
+          {
+            data: pet.map((entry) => entry.count),
+            color: (opacity = 1) => `rgba(75, 192, 192, ${opacity})`,
+            strokeWidth: 2,
+          },
+        ],
+        legend: ['Paper', 'Can', 'PET Bottles'],
+      });
+    } catch (error) {
+      console.error('Error fetching chart data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleDownloadCSV = async () => {
+    try {
+      const now = moment();
+      let start, end;
+
+      if (range === 'daily') {
+        start = now.clone().startOf('isoWeek');
+        end = now.clone().endOf('isoWeek');
+      } else if (range === 'weekly') {
+        start = now.clone().startOf('month');
+        end = now.clone().endOf('month');
+      } else if (range === 'monthly') {
+        start = now.clone().startOf('year');
+        end = now.clone().endOf('year');
+      } else {
+        start = now.clone().subtract(3, 'years').startOf('year');
+        end = now.clone().endOf('year');
+      }
+
+      const { data, error } = await supabase
+        .from('detections_log')
+        .select('created_at, object_type')
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString());
+
+      if (error) {
+        console.error('CSV fetch error:', error.message);
+        Alert.alert('Error', 'Failed to fetch data for CSV');
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        Alert.alert('No Data', 'No records found for this range.');
+        return;
+      }
+
+      const activeTab = rangeLabels[range];
+
+      const groupFn = {
+        Daily: (d: { created_at: moment.MomentInput }) =>
+          moment(d.created_at).format('YYYY-MM-DD'),
+      
+        Weekly: (d: { created_at: moment.MomentInput }) => {
+          const date = moment(d.created_at);
+          const weekStart = date.clone().startOf('isoWeek').format('YYYY-MM-DD');
+          const weekEnd = date.clone().endOf('isoWeek').format('YYYY-MM-DD');
+          return `${weekStart} to ${weekEnd}`;
+        },
+      
+        Monthly: (d: { created_at: moment.MomentInput }) =>
+          moment(d.created_at).format('YYYY-MM'),
+      
+        Yearly: (d: { created_at: moment.MomentInput }) =>
+          moment(d.created_at).format('YYYY'),
+      }[activeTab];
+
+      const grouped: Record<string, { label: string; paper: number; can: number; 'pet bottle': number }> = {};
+
+      data.forEach(entry => {
+        if (!groupFn) {
+          throw new Error(`Invalid activeTab: ${activeTab}`);
+        }
+        const group = groupFn(entry);
+        const type = entry.object_type as 'paper' | 'can' | 'pet bottle';
+
+        if (!grouped[group]) grouped[group] = { label: group, paper: 0, can: 0, 'pet bottle': 0 };
+        grouped[group][type]++;
+      });
+
+      const csvData = Object.values(grouped);
+      await downloadCSV(csvData, 'combined_bins', range);
+    } catch (err) {
+      console.error('Download error:', err);
+      Alert.alert('Error', 'An unexpected error occurred while downloading.');
+    }
+  };
+
+  useEffect(() => {
+    fetchAllData();
+  }, [range]);
+
   return (
-    <View>
-      <Text style={{ textAlign: "center", fontSize: 16, marginBottom: 10, marginTop: 30 }}>
-        Trash Collection Summary
-      </Text>
-      {selectedValue && (
-        <Text style={{ textAlign: "center", fontSize: 14, marginBottom: 10 }}>
-          Selected Value: {selectedValue}
-        </Text>
-      )}
-      <LineChart
-        data={data}
-        width={385} // Adjusted to use full screen width
-        height={350}
-        chartConfig={{
-          backgroundGradientFrom: "#fff",
-          backgroundGradientTo: "#fff",
-          color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-          labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-          style: {
-            borderRadius: 8,
-          },
-          propsForDots: {
-            r: "7",
-            strokeWidth: "3",
-            stroke: "#000",
-          },
-        }}
-        bezier
-        style={{ marginVertical: 8, borderRadius: 8 }}
-        onDataPointClick={(data) => {
-          setSelectedValue(`Value: ${data.value}, Index: ${data.index}`);
-        }}
-      />
+    <View style={styles.container}>
+      <Text style={styles.title}>Trash Collection Summary</Text>
+
+      <View style={styles.tabBar}>
+        {Object.keys(rangeLabels).map((r) => (
+          <TouchableOpacity
+            key={r}
+            style={[styles.tab, range === r && styles.activeTab]}
+            onPress={() => setRange(r as any)}
+          >
+            <Text style={[styles.tabText, range === r && styles.activeTabText]}>
+              {rangeLabels[r as keyof typeof rangeLabels]}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.chartWrapper}>
+        {loading || !chartData ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#000" />
+          </View>
+        ) : (
+          <LineChart
+            data={chartData}
+            width={screenWidth - 45}
+            height={320}
+            chartConfig={{
+              backgroundGradientFrom: '#fff',
+              backgroundGradientTo: '#fff',
+              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+              propsForDots: {
+                r: '5',
+                strokeWidth: '2',
+                stroke: '#000',
+              },
+            }}
+            bezier
+            style={styles.chart}
+          />
+        )}
+      </View>
+
+      <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadCSV}>
+        <Text style={styles.downloadText}>Download All as CSV</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginLeft: 0,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderColor: '#ddd',
+    paddingBottom: 6,
+  },
+  tab: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderColor: '#000',
+  },
+  tabText: {
+    fontSize: 16,
+    color: 'gray',
+  },
+  activeTabText: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  chartWrapper: {
+    height: 340,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chart: {
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+  downloadButton: {
+    marginTop: 20,
+    paddingVertical: 12,
+    backgroundColor: '#000',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  downloadText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});
+
 export default SummaryCharts;
-
-
-function rgba(arg0: number, arg1: number, arg2: number, $: any, arg4: { opacity: number; }) {
-    throw new Error("Function not implemented.");
-}
-// Removed unused rgba function as it is not implemented and unnecessary.

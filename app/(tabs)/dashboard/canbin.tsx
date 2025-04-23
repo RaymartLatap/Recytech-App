@@ -1,0 +1,234 @@
+import { Stack } from 'expo-router';
+import React, { Component, useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { BarChart } from 'react-native-gifted-charts';
+import moment from 'moment';
+import { supabase } from '@/utils/supabase';
+
+const CanBinBarChart = () => {
+  const [currentWeek, setCurrentWeek] = useState(0);
+  const [activeTab, setActiveTab] = useState('Daily');
+  const [chartData, setChartData] = useState<{ value: number; label: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const getWeekRange = (weekOffset: number) => {
+    const start = moment().startOf('isoWeek').add(weekOffset, 'weeks');
+    const end = start.clone().endOf('isoWeek');
+    return `${start.format('MMM D')} - ${end.format('D')}`;
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      let start, end;
+      const now = moment();
+
+      if (activeTab === 'Daily') {
+        start = now.clone().startOf('isoWeek').add(currentWeek, 'weeks');
+        end = start.clone().endOf('isoWeek');
+      } else if (activeTab === 'Weekly') {
+        start = now.clone().startOf('month');
+        end = now.clone().endOf('month');
+      } else if (activeTab === 'Monthly') {
+        start = now.clone().startOf('year');
+        end = now.clone().endOf('year');
+      } else {
+        start = now.clone().subtract(3, 'years').startOf('year');
+        end = now.clone().endOf('year');
+      }
+
+      const { data, error } = await supabase
+        .from('detections_log')
+        .select('created_at')
+        .eq('object_type', 'can')
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString());
+
+      if (error) {
+        console.error('Supabase fetch error:', error.message);
+        return;
+      }
+
+      let result = [];
+
+      if (activeTab === 'Daily') {
+        const counts = Array(7).fill(0);
+        data.forEach(entry => {
+          const index = moment(entry.created_at).isoWeekday() - 1;
+          if (index >= 0) counts[index]++;
+        });
+        const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        result = labels.map((label, idx) => ({ label, value: counts[idx] }));
+      } else if (activeTab === 'Weekly') {
+        const weekCounts = [0, 0, 0, 0];
+        data.forEach(entry => {
+          const day = moment(entry.created_at).date();
+          const index = Math.min(3, Math.floor((day - 1) / 7));
+          weekCounts[index]++;
+        });
+        result = weekCounts.map((count, i) => ({ label: `Week ${i + 1}`, value: count }));
+      } else if (activeTab === 'Monthly') {
+        const monthCounts = Array(12).fill(0);
+        data.forEach(entry => {
+          const index = moment(entry.created_at).month();
+          monthCounts[index]++;
+        });
+        result = monthCounts.map((count, i) => ({
+          label: moment().month(i).format('MMM'),
+          value: count,
+        }));
+      } else {
+        const yearGroups: { [year: string]: number } = {};
+        data.forEach(entry => {
+          const year = moment(entry.created_at).year();
+          yearGroups[year] = (yearGroups[year] || 0) + 1;
+        });
+        result = Object.entries(yearGroups).map(([year, count]) => ({
+          label: year,
+          value: count,
+        }));
+      }
+
+      setChartData(result);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [activeTab, currentWeek]);
+
+  const getChartStyles = () => {
+    const base = {
+      yAxisTextStyle: { color: 'gray' },
+      yAxisLabelWidth: 30,
+    };
+
+    switch (activeTab) {
+      case 'Daily':
+        return { ...base, barWidth: 30, spacing: 18, frontColor: '#8BC34A' };
+      case 'Weekly':
+        return { ...base, barWidth: 40, spacing: 25, frontColor: '#03A9F4' };
+      case 'Monthly':
+        return { ...base, barWidth: 50, spacing: 20, frontColor: '#FFC107' };
+      case 'Yearly':
+        return { ...base, barWidth: 45, spacing: 20, frontColor: '#9C27B0' };
+      default:
+        return base;
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.tabBar}>
+        {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tab, activeTab === tab && styles.activeTab]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+              {tab}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.title}>Can Bin Collection ({activeTab})</Text>
+
+      {activeTab === 'Daily' && (
+        <View style={styles.weekSelector}>
+          <TouchableOpacity onPress={() => setCurrentWeek(Math.max(currentWeek - 1, 0))}>
+            <Text style={styles.arrow}>{'◀'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.weekRange}>{getWeekRange(currentWeek)}</Text>
+          <TouchableOpacity onPress={() => setCurrentWeek(Math.min(currentWeek + 1, 3))}>
+            <Text style={styles.arrow}>{'▶'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 20 }} />
+      ) : (
+        <BarChart
+          data={chartData}
+          {...getChartStyles()}
+          yAxisThickness={1}
+          xAxisThickness={1}
+          hideRules={false}
+          noOfSections={4}
+          maxValue={Math.max(...chartData.map(item => item.value), 10)}
+        />
+      )}
+    </View>
+  );
+};
+
+
+export class CanBinScreen extends Component {
+  render() {
+    return (
+      <View style={{ flex: 1 }}>
+        <Stack.Screen options={{ title: 'Can Bin Collection' }} />
+        <CanBinBarChart />
+      </View>
+    );
+  }
+}
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 20,
+    backgroundColor: '#fff',
+    flex: 1,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  weekSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  arrow: {
+    fontSize: 18,
+    color: '#4CAF50',
+    marginHorizontal: 10,
+  },
+  weekRange: {
+    fontSize: 14,
+    color: 'gray',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderColor: '#ddd',
+    paddingBottom: 10,
+  },
+  tab: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  tabText: {
+    fontSize: 16,
+    color: 'gray',
+  },
+  activeTabText: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+});
+
+export default CanBinScreen;
