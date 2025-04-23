@@ -49,7 +49,10 @@
     "react-native-web": "~0.19.13",
     "recharts": "^2.15.1",
     "victory": "^37.3.6",
-    "victory-native": "^41.16.1"
+    "victory-native": "^41.16.1",
+    "expo-notifications": "~0.29.14",
+    "expo-device": "~7.0.3",
+    "expo-dev-client": "~5.0.20"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
