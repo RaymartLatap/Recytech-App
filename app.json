@@ -17,10 +17,12 @@
       "supportsTablet": true
     },
 "android": {
+  "useNextNotificationsApi": true,
   "permissions": [
     "READ_EXTERNAL_STORAGE",
     "WRITE_EXTERNAL_STORAGE",
-    "MANAGE_EXTERNAL_STORAGE"
+    "MANAGE_EXTERNAL_STORAGE",
+    "NOTIFICATIONS"
   ],
   "googleServicesFile": "./google-services.json",
   "adaptiveIcon": {
