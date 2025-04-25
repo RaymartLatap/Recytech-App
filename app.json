@@ -1,35 +1,38 @@
 {
   "expo": {
-    "name": "Recytech-App",
+    "name": "Recytech",
     "slug": "Recytech-App",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true
     },
-"android": {
-  "useNextNotificationsApi": true,
-  "permissions": [
-    "READ_EXTERNAL_STORAGE",
-    "WRITE_EXTERNAL_STORAGE",
-    "MANAGE_EXTERNAL_STORAGE",
-    "NOTIFICATIONS"
-  ],
-  "googleServicesFile": "./google-services.json",
-  "adaptiveIcon": {
-    "foregroundImage": "./assets/images/adaptive-icon.png",
-    "backgroundColor": "#ffffff"
-  },
-  "package": "com.rlatap.RecytechApp"
+    "android": {
+      "useNextNotificationsApi": true,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "MANAGE_EXTERNAL_STORAGE",
+        "NOTIFICATIONS"
+      ],
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "notification": {
+        "icon": "./assets/images/notification-icon.png",
+        "color": "#007AFF"
+      },
+      "package": "com.rlatap.RecytechApp"
     },
     "web": {
       "bundler": "metro",
