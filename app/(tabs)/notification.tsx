@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, SectionList, RefreshControl } from 'react-native';
+import { StyleSheet, SectionList, RefreshControl, Pressable } from 'react-native';
 import { View, Text } from '@/components/Themed';
 import { supabase } from '@/utils/supabase';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -63,6 +63,11 @@ export default function NotificationScreen() {
     );
   };
 
+  const markAllAsRead = async () => {
+    await supabase.from('notifications').update({ read: true }).eq('read', false);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
   const groupNotifications = (): Section[] => {
     const today: Notification[] = [];
     const yesterday: Notification[] = [];
@@ -89,7 +94,12 @@ export default function NotificationScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Notifications</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Notifications</Text>
+        <Pressable onPress={markAllAsRead}>
+          <Text style={styles.markAll}>Mark All as Read</Text>
+        </Pressable>
+      </View>
       <SectionList
         sections={groupNotifications()}
         keyExtractor={(item) => item.id}
@@ -120,7 +130,22 @@ export default function NotificationScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  title: { fontSize: 24, fontWeight: 'bold' },
+  markAll: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#dceeff',
+  },
   sectionHeader: {
     fontSize: 18,
     fontWeight: '600',
@@ -147,7 +172,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   readAction: {
-    backgroundColor: '#add8e6', // Light blue
+    backgroundColor: '#add8e6',
     color: '#000',
     paddingHorizontal: 12,
     paddingVertical: 10,
