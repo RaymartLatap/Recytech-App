@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
+import { LinearGradient } from 'expo-linear-gradient';
 import { fetchGroupedCounts } from '@/utils/fetchGroupedCounts';
 import { downloadCSV } from '@/utils/downloadCSV'; // ✅ make sure this exists
 import { supabase } from '@/utils/supabase';
@@ -149,55 +150,58 @@ const SummaryCharts: React.FC = () => {
   }, [range]);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Trash Collection Summary</Text>
-
-      <View style={styles.tabBar}>
-        {Object.keys(rangeLabels).map((r) => (
-          <TouchableOpacity
-            key={r}
-            style={[styles.tab, range === r && styles.activeTab]}
-            onPress={() => setRange(r as any)}
-          >
-            <Text style={[styles.tabText, range === r && styles.activeTabText]}>
-              {rangeLabels[r as keyof typeof rangeLabels]}
-            </Text>
-          </TouchableOpacity>
-        ))}
+    <LinearGradient colors={['#4facfe', '#00f2fe']} style={styles.gradient}>
+      <View style={styles.container}>
+        <Text style={styles.title}>Trash Collection Summary</Text>
+  
+        <View style={styles.tabBar}>
+          {Object.keys(rangeLabels).map((r) => (
+            <TouchableOpacity
+              key={r}
+              style={[styles.tab, range === r && styles.activeTab]}
+              onPress={() => setRange(r as any)}
+            >
+              <Text style={[styles.tabText, range === r && styles.activeTabText]}>
+                {rangeLabels[r as keyof typeof rangeLabels]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+  
+        <View style={styles.chartWrapper}>
+          {loading || !chartData ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#000" />
+            </View>
+          ) : (
+            <LineChart
+              data={chartData}
+              width={screenWidth - 70}
+              height={320}
+              chartConfig={{
+                backgroundGradientFrom: '#fff',
+                backgroundGradientTo: '#fff',
+                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                propsForDots: {
+                  r: '5',
+                  strokeWidth: '2',
+                  stroke: '#000',
+                },
+              }}
+              bezier
+              style={styles.chart}
+            />
+          )}
+        </View>
+  
+        <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadCSV}>
+          <Text style={styles.downloadText}>Download All as CSV</Text>
+        </TouchableOpacity>
       </View>
-
-      <View style={styles.chartWrapper}>
-        {loading || !chartData ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#000" />
-          </View>
-        ) : (
-          <LineChart
-            data={chartData}
-            width={screenWidth - 45}
-            height={320}
-            chartConfig={{
-              backgroundGradientFrom: '#fff',
-              backgroundGradientTo: '#fff',
-              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              propsForDots: {
-                r: '5',
-                strokeWidth: '2',
-                stroke: '#000',
-              },
-            }}
-            bezier
-            style={styles.chart}
-          />
-        )}
-      </View>
-
-      <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadCSV}>
-        <Text style={styles.downloadText}>Download All as CSV</Text>
-      </TouchableOpacity>
-    </View>
+    </LinearGradient>
   );
+  
 };
 
 const styles = StyleSheet.create({
@@ -214,6 +218,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 4,
+  },
+  gradient: {
+    flex: 1,
+    marginTop: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    borderRadius: 12,
   },
   title: {
     fontSize: 20,
