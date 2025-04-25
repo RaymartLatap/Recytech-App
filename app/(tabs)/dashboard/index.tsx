@@ -4,6 +4,7 @@ import { View, Text, Image, StyleSheet, Pressable, ScrollView } from 'react-nati
 import { useRouter } from 'expo-router';
 import { supabase } from '@/utils/supabase';
 import SummaryCharts from '@/components/SummaryCharts';
+import { Ionicons } from '@expo/vector-icons'; // Add this import
 
 type BinCardProps = {
   objectType: string;
@@ -17,11 +18,11 @@ const BinCard = ({ objectType, count, imageUrl, onPress }: BinCardProps) => (
     <Image source={{ uri: imageUrl }} style={styles.image} />
     <View style={styles.cardContent}>
       <Text style={styles.title}>{objectType}</Text>
-      <Text style={styles.subtitle}>Collected: {count}</Text>
     </View>
     <View style={styles.circle}>
       <Text style={styles.circleText}>{count}</Text>
     </View>
+    <Ionicons name="chevron-forward" size={24} color="#333" style={styles.arrow} />
   </Pressable>
 );
 
@@ -116,19 +117,19 @@ export default function RecyclingBinsScreen() {
         <BinCard
           objectType="Paper"
           count={counts.paper}
-          imageUrl="https://example.com/paper-icon.png"
+          imageUrl="https://mujhbmfszwchxwhmdhjl.supabase.co/storage/v1/object/public/bin-logo//paper.png"
           onPress={() => router.push("/(tabs)/dashboard/paperbin")}
         />
         <BinCard
           objectType="Pet Bottle"
           count={counts.petBottle}
-          imageUrl="https://example.com/plastic-bottle-icon.png"
+          imageUrl="https://mujhbmfszwchxwhmdhjl.supabase.co/storage/v1/object/public/bin-logo//pet-bottle.png"
           onPress={() => router.push("/(tabs)/dashboard/petbottlebin")}
         />
         <BinCard
           objectType="Cans"
           count={counts.cans}
-          imageUrl="https://example.com/cans-icon.png"
+          imageUrl="https://mujhbmfszwchxwhmdhjl.supabase.co/storage/v1/object/public/bin-logo/can.png"
           onPress={() => router.push("/(tabs)/dashboard/canbin")}
         />
       </LinearGradient>
@@ -171,7 +172,8 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
+    margin: 24,
     fontWeight: 'bold',
   },
   subtitle: {
@@ -190,5 +192,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  arrow: {
+    marginLeft: 'auto',
+    color: '#333',
   },
 });

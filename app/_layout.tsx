@@ -1,5 +1,5 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -7,7 +7,6 @@ import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/components/useColorScheme';
 import NotificationProvider from '@/provider/NotificationProvider';
 
 // ✅ Set global notification handler BEFORE app renders
@@ -28,7 +27,7 @@ export default function Layout() {
     ...FontAwesome.font,
   });
 
-  const colorScheme = useColorScheme();
+  const colorScheme = 'light'; // ✅ Force light theme always
 
   useEffect(() => {
     if (error) throw error;
@@ -43,7 +42,7 @@ export default function Layout() {
   if (!loaded) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DefaultTheme}>
       <NotificationProvider>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
