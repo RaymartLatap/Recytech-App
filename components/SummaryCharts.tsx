@@ -11,7 +11,7 @@ import {
 import { LineChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fetchGroupedCounts } from '@/utils/fetchGroupedCounts';
-import { downloadCSV } from '@/utils/downloadCSV'; // ✅ make sure this exists
+import { downloadCSV } from '@/utils/downloadCSV';
 import { supabase } from '@/utils/supabase';
 import moment from 'moment';
 
@@ -28,14 +28,15 @@ const SummaryCharts: React.FC = () => {
   const [range, setRange] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
   const [chartData, setChartData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [currentWeek, setCurrentWeek] = useState<moment.Moment>(moment());
 
   const fetchAllData = async () => {
     setLoading(true);
     try {
       const [paper, can, pet] = await Promise.all([
-        fetchGroupedCounts('paper', range),
-        fetchGroupedCounts('can', range),
-        fetchGroupedCounts('pet bottle', range),
+        fetchGroupedCounts('paper', range, currentWeek.isoWeek()),
+        fetchGroupedCounts('can', range, currentWeek.isoWeek()),
+        fetchGroupedCounts('pet bottle', range, currentWeek.isoWeek()),
       ]);
 
       const labels = paper.map((entry) => entry.date);
@@ -72,10 +73,12 @@ const SummaryCharts: React.FC = () => {
     try {
       const now = moment();
       let start, end;
-
+  
       if (range === 'daily') {
-        start = now.clone().startOf('isoWeek');
-        end = now.clone().endOf('isoWeek');
+        const selectedWeekStart = currentWeek.clone().startOf('isoWeek');
+        const selectedWeekEnd = currentWeek.clone().endOf('isoWeek');
+        start = selectedWeekStart;
+        end = selectedWeekEnd;
       } else if (range === 'weekly') {
         start = now.clone().startOf('month');
         end = now.clone().endOf('month');
@@ -83,60 +86,60 @@ const SummaryCharts: React.FC = () => {
         start = now.clone().startOf('year');
         end = now.clone().endOf('year');
       } else {
-        start = now.clone().subtract(3, 'years').startOf('year');
+        start = moment('2025-01-01').startOf('year');
         end = now.clone().endOf('year');
       }
-
+  
       const { data, error } = await supabase
         .from('detections_log')
         .select('created_at, object_type')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
-
+  
       if (error) {
         console.error('CSV fetch error:', error.message);
         Alert.alert('Error', 'Failed to fetch data for CSV');
         return;
       }
-
+  
       if (!data || data.length === 0) {
         Alert.alert('No Data', 'No records found for this range.');
         return;
       }
-
+  
       const activeTab = rangeLabels[range];
-
+  
       const groupFn = {
         Daily: (d: { created_at: moment.MomentInput }) =>
           moment(d.created_at).format('YYYY-MM-DD'),
-      
+  
         Weekly: (d: { created_at: moment.MomentInput }) => {
           const date = moment(d.created_at);
           const weekStart = date.clone().startOf('isoWeek').format('YYYY-MM-DD');
           const weekEnd = date.clone().endOf('isoWeek').format('YYYY-MM-DD');
           return `${weekStart} to ${weekEnd}`;
         },
-      
+  
         Monthly: (d: { created_at: moment.MomentInput }) =>
           moment(d.created_at).format('YYYY-MM'),
-      
+  
         Yearly: (d: { created_at: moment.MomentInput }) =>
           moment(d.created_at).format('YYYY'),
       }[activeTab];
-
+  
       const grouped: Record<string, { label: string; paper: number; can: number; 'pet bottle': number }> = {};
-
+  
       data.forEach(entry => {
-        if (!groupFn) {
-          throw new Error(`Invalid activeTab: ${activeTab}`);
-        }
+        if (!groupFn) throw new Error(`Invalid activeTab: ${activeTab}`);
         const group = groupFn(entry);
         const type = entry.object_type as 'paper' | 'can' | 'pet bottle';
-
-        if (!grouped[group]) grouped[group] = { label: group, paper: 0, can: 0, 'pet bottle': 0 };
+  
+        if (!grouped[group]) {
+          grouped[group] = { label: group, paper: 0, can: 0, 'pet bottle': 0 };
+        }
         grouped[group][type]++;
       });
-
+  
       const csvData = Object.values(grouped);
       await downloadCSV(csvData, 'combined_bins', range);
     } catch (err) {
@@ -144,16 +147,30 @@ const SummaryCharts: React.FC = () => {
       Alert.alert('Error', 'An unexpected error occurred while downloading.');
     }
   };
+  
+
+  const handleWeekNavigation = (direction: 'prev' | 'next') => {
+    const newWeek = direction === 'prev' ? currentWeek.clone().subtract(1, 'week') : currentWeek.clone().add(1, 'week');
+    setCurrentWeek(newWeek);
+  };
+
+  const getWeekRange = (date: moment.Moment) => {
+    const startOfWeek = date.clone().startOf('isoWeek');
+    const endOfWeek = date.clone().endOf('isoWeek');
+    const startFormatted = startOfWeek.format('MMMM D');
+    const endFormatted = endOfWeek.format('MMMM D');
+    return `${startFormatted} - ${endFormatted}`;
+  };
 
   useEffect(() => {
     fetchAllData();
-  }, [range]);
+  }, [range, currentWeek]);
 
   return (
     <LinearGradient colors={['#4facfe', '#00f2fe']} style={styles.gradient}>
       <View style={styles.container}>
         <Text style={styles.title}>Trash Collection Summary</Text>
-  
+
         <View style={styles.tabBar}>
           {Object.keys(rangeLabels).map((r) => (
             <TouchableOpacity
@@ -167,7 +184,19 @@ const SummaryCharts: React.FC = () => {
             </TouchableOpacity>
           ))}
         </View>
-  
+
+        {range === 'daily' && (
+          <View style={styles.weekNav}>
+            <TouchableOpacity onPress={() => handleWeekNavigation('prev')}>
+              <Text style={styles.weekNavText}>{'<'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.currentWeekText}>{getWeekRange(currentWeek)}</Text>
+            <TouchableOpacity onPress={() => handleWeekNavigation('next')}>
+              <Text style={styles.weekNavText}>{'>'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.chartWrapper}>
           {loading || !chartData ? (
             <View style={styles.loadingContainer}>
@@ -194,14 +223,13 @@ const SummaryCharts: React.FC = () => {
             />
           )}
         </View>
-  
+
         <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadCSV}>
           <Text style={styles.downloadText}>Download All as CSV</Text>
         </TouchableOpacity>
       </View>
     </LinearGradient>
   );
-  
 };
 
 const styles = StyleSheet.create({
@@ -256,6 +284,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     fontWeight: 'bold',
+  },
+  weekNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingHorizontal: 12,
+  },
+  weekNavText: {
+    fontSize: 24,
+    color: '#000',
+    fontWeight: '600',
+  },
+  currentWeekText: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '600',
   },
   chartWrapper: {
     height: 340,

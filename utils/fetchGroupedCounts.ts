@@ -1,23 +1,24 @@
 import { supabase } from '@/utils/supabase';
 import moment from 'moment';
 
-export async function fetchGroupedCounts(objectType: string, range: 'daily' | 'weekly' | 'monthly' | 'yearly') {
+export async function fetchGroupedCounts(objectType: string, range: 'daily' | 'weekly' | 'monthly' | 'yearly', currentWeek: number) {
   let fromDate: string;
   let toDate: string;
 
   const now = moment();
 
   if (range === 'daily') {
-    fromDate = now.startOf('isoWeek').toISOString();
-    toDate = now.endOf('isoWeek').toISOString();
+    const startOfWeek = now.clone().isoWeek(currentWeek).startOf('isoWeek');
+    const endOfWeek = now.clone().isoWeek(currentWeek).endOf('isoWeek');
+    fromDate = startOfWeek.toISOString();
+    toDate = endOfWeek.toISOString();
   } else if (range === 'weekly') {
-    fromDate = now.startOf('month').toISOString();
-    toDate = now.endOf('month').toISOString();
+    fromDate = now.clone().startOf('month').toISOString();
+    toDate = now.clone().endOf('month').toISOString();
   } else if (range === 'monthly') {
-    fromDate = now.startOf('year').toISOString();
-    toDate = now.endOf('year').toISOString();
+    fromDate = now.clone().startOf('year').toISOString();
+    toDate = now.clone().endOf('year').toISOString();
   } else {
-    // Start from 2025 instead of 3 years ago
     fromDate = moment('2025-01-01').startOf('year').toISOString();
     toDate = now.endOf('year').toISOString();
   }
