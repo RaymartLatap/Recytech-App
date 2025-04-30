@@ -18,8 +18,8 @@ const PaperBinBarChart = () => {
       const now = moment();
 
       if (activeTab === 'Daily') {
-        start = now.clone().startOf('isoWeek');
-        end = now.clone().endOf('isoWeek');
+        start = now.clone().startOf('isoWeek').add(currentWeek, 'weeks');
+        end = now.clone().endOf('isoWeek').add(currentWeek, 'weeks');
       } else if (activeTab === 'Weekly') {
         start = now.clone().startOf('month');
         end = now.clone().endOf('month');
@@ -111,7 +111,10 @@ const PaperBinBarChart = () => {
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
+            onPress={() => {
+              setActiveTab(tab);
+              setCurrentWeek(0); // Reset to current week when changing tabs
+            }}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
               {tab}
@@ -119,6 +122,25 @@ const PaperBinBarChart = () => {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Week Selector for Daily Tab */}
+      {activeTab === 'Daily' && (
+        <View style={styles.weekSelector}>
+          <TouchableOpacity onPress={() => setCurrentWeek(prev => prev - 1)}>
+            <Text style={styles.arrow}>◀</Text>
+          </TouchableOpacity>
+          <Text style={styles.weekRange}>
+            {moment().startOf('isoWeek').add(currentWeek, 'weeks').format('MMM D')} -{' '}
+            {moment().endOf('isoWeek').add(currentWeek, 'weeks').format('MMM D')}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setCurrentWeek(prev => Math.min(prev + 1, 0))}
+            disabled={currentWeek === 0}
+          >
+            <Text style={[styles.arrow, currentWeek === 0 && { opacity: 0.3 }]}>▶</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Text style={styles.title}>Paper Bin Collection ({activeTab})</Text>
 
@@ -138,7 +160,6 @@ const PaperBinBarChart = () => {
     </View>
   );
 };
-
 
 export class examplescreen extends Component {
   render() {

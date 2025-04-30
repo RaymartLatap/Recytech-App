@@ -137,14 +137,21 @@ const CanBinBarChart = () => {
 
       <Text style={styles.title}>Can Bin Collection ({activeTab})</Text>
 
+      {/* Week Selector for Daily Tab */}
       {activeTab === 'Daily' && (
         <View style={styles.weekSelector}>
-          <TouchableOpacity onPress={() => setCurrentWeek(Math.max(currentWeek - 1, 0))}>
-            <Text style={styles.arrow}>{'◀'}</Text>
+          <TouchableOpacity onPress={() => setCurrentWeek(prev => prev - 1)}>
+            <Text style={styles.arrow}>◀</Text>
           </TouchableOpacity>
-          <Text style={styles.weekRange}>{getWeekRange(currentWeek)}</Text>
-          <TouchableOpacity onPress={() => setCurrentWeek(Math.min(currentWeek + 1, 3))}>
-            <Text style={styles.arrow}>{'▶'}</Text>
+          <Text style={styles.weekRange}>
+            {moment().startOf('isoWeek').add(currentWeek, 'weeks').format('MMM D')} -{' '}
+            {moment().endOf('isoWeek').add(currentWeek, 'weeks').format('MMM D')}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setCurrentWeek(prev => Math.min(prev + 1, 0))}
+            disabled={currentWeek === 0}
+          >
+            <Text style={[styles.arrow, currentWeek === 0 && { opacity: 0.3 }]}>▶</Text>
           </TouchableOpacity>
         </View>
       )}
