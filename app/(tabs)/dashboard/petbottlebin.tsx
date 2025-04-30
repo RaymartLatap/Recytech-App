@@ -150,11 +150,11 @@ const PetBottleBarChart = () => {
 
       {activeTab === 'Daily' && (
         <View style={styles.weekSelector}>
-          <TouchableOpacity onPress={() => setCurrentWeek(Math.max(currentWeek - 1, 0))}>
+          <TouchableOpacity onPress={() => setCurrentWeek(currentWeek - 1)}>
             <Text style={styles.arrow}>{'\u25C0'}</Text>
           </TouchableOpacity>
           <Text style={styles.weekRange}>{getWeekRange(currentWeek)}</Text>
-          <TouchableOpacity onPress={() => setCurrentWeek(Math.min(currentWeek + 1, 3))}>
+          <TouchableOpacity onPress={() => setCurrentWeek(currentWeek < 0 ? currentWeek + 1 : currentWeek)}>
             <Text style={styles.arrow}>{'\u25B6'}</Text>
           </TouchableOpacity>
         </View>
