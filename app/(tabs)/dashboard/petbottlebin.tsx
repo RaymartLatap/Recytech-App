@@ -173,16 +173,11 @@ const PetBottleBarChart = () => {
         <BarChart
           data={chartData}
           {...chartStyles[activeTab]}
-          yAxisTextStyle={{ color: 'gray' }}
-          yAxisLabelWidth={30}
-          yAxisColor="#ccc"
           yAxisThickness={1}
           xAxisThickness={1}
           hideRules={false}
           noOfSections={4}
-          maxValue={Math.max(...chartData.map(item => item.value), 10)}
-          isAnimated
-          animationDuration={800}
+          maxValue={Math.max(...chartData.map(item => item.value), 0)} // Ensure it doesn't add 1 if no data
         />
       )}
     </View>

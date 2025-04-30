@@ -90,7 +90,28 @@ const PaperBinBarChart = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(); // initial load
+
+    const channel = supabase
+      .channel('paper-detections')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'detections_log',
+          filter: 'object_type=eq.paper',
+        },
+        (payload) => {
+          console.log('New paper detection:', payload);
+          fetchData(); // refresh chart
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel); // cleanup
+    };
   }, [activeTab, currentWeek]);
 
   const getChartStyles = () => {
@@ -113,7 +134,7 @@ const PaperBinBarChart = () => {
             style={[styles.tab, activeTab === tab && styles.activeTab]}
             onPress={() => {
               setActiveTab(tab);
-              setCurrentWeek(0); // Reset to current week when changing tabs
+              setCurrentWeek(0); // reset week
             }}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
@@ -123,7 +144,6 @@ const PaperBinBarChart = () => {
         ))}
       </View>
 
-      {/* Week Selector for Daily Tab */}
       {activeTab === 'Daily' && (
         <View style={styles.weekSelector}>
           <TouchableOpacity onPress={() => setCurrentWeek(prev => prev - 1)}>
