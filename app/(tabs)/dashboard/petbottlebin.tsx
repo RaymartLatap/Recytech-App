@@ -7,23 +7,29 @@ import { supabase } from '@/utils/supabase';
 
 const PetBottleBarChart = () => {
   const [currentWeek, setCurrentWeek] = useState(0);
-  const [activeTab, setActiveTab] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
-  const [dailyData, setDailyData] = useState<{ value: number; label: string }[]>([]);
-  const [weeklyData, setWeeklyData] = useState<{ value: number; label: string }[]>([]);
-  const [monthlyData, setMonthlyData] = useState<{ value: number; label: string }[]>([]);
+  const [activeTab, setActiveTab] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Yearly'>('Daily');
+  const [chartData, setChartData] = useState<{ value: number; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const getWeekRange = (weekOffset: number) => {
-    const start = moment().startOf('isoWeek').add(weekOffset, 'weeks');
-    const end = start.clone().endOf('isoWeek');
-    return `${start.format('MMM D')} - ${end.format('D')}`;
-  };
-
-  const fetchDailyData = async (weekOffset: number) => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const start = moment().startOf('isoWeek').add(weekOffset, 'weeks');
-      const end = start.clone().endOf('isoWeek');
+      let start, end;
+      const now = moment();
+
+      if (activeTab === 'Daily') {
+        start = now.clone().startOf('isoWeek').add(currentWeek, 'weeks');
+        end = now.clone().endOf('isoWeek').add(currentWeek, 'weeks');
+      } else if (activeTab === 'Weekly') {
+        start = now.clone().startOf('month');
+        end = now.clone().endOf('month');
+      } else if (activeTab === 'Monthly') {
+        start = now.clone().startOf('year');
+        end = now.clone().endOf('year');
+      } else {
+        start = now.clone().subtract(3, 'years').startOf('year');
+        end = now.clone().endOf('year');
+      }
 
       const { data, error } = await supabase
         .from('detections_log')
@@ -32,112 +38,104 @@ const PetBottleBarChart = () => {
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase fetch error:', error.message);
+        return;
+      }
 
-      const counts = Array(7).fill(0);
-      data.forEach(entry => {
-        const day = moment(entry.created_at).isoWeekday() - 1;
-        if (day >= 0 && day < 7) counts[day]++;
-      });
+      let result = [];
 
-      const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      setDailyData(labels.map((label, i) => ({ label, value: counts[i] })));
-    } catch (err) {
-      console.error('Fetch daily error:', (err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (activeTab === 'Daily') {
+        const counts = Array(7).fill(0);
+        data.forEach(entry => {
+          const index = moment(entry.created_at).isoWeekday() - 1;
+          if (index >= 0) counts[index]++;
+        });
+        const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        result = labels.map((label, idx) => ({ label, value: counts[idx] }));
+      } else if (activeTab === 'Weekly') {
+        const weekCounts = [0, 0, 0, 0];
+        data.forEach(entry => {
+          const day = moment(entry.created_at).date();
+          const index = Math.min(3, Math.floor((day - 1) / 7));
+          weekCounts[index]++;
+        });
+        result = weekCounts.map((count, i) => ({ label: `Week ${i + 1}`, value: count }));
+      } else if (activeTab === 'Monthly') {
+        const monthCounts = Array(12).fill(0);
+        data.forEach(entry => {
+          const index = moment(entry.created_at).month();
+          monthCounts[index]++;
+        });
+        result = monthCounts.map((count, i) => ({
+          label: moment().month(i).format('MMM'),
+          value: count,
+        }));
+      } else {
+        const yearGroups: { [year: string]: number } = {};
+        data.forEach(entry => {
+          const year = moment(entry.created_at).year();
+          yearGroups[year] = (yearGroups[year] || 0) + 1;
+        });
+        result = Object.entries(yearGroups).map(([year, count]) => ({
+          label: year,
+          value: count,
+        }));
+      }
 
-  const fetchWeeklyData = async () => {
-    setLoading(true);
-    try {
-      const start = moment().startOf('month');
-      const end = moment().endOf('month');
-
-      const { data, error } = await supabase
-        .from('detections_log')
-        .select('created_at')
-        .eq('object_type', 'pet bottle')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
-
-      if (error) throw error;
-
-      const weeks = [0, 0, 0, 0];
-      data.forEach(entry => {
-        const day = moment(entry.created_at).date();
-        if (day <= 7) weeks[0]++;
-        else if (day <= 14) weeks[1]++;
-        else if (day <= 21) weeks[2]++;
-        else weeks[3]++;
-      });
-
-      setWeeklyData(weeks.map((value, i) => ({ label: `Week ${i + 1}`, value })));
-    } catch (err) {
-      console.error('Fetch weekly error:', (err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMonthlyData = async () => {
-    setLoading(true);
-    try {
-      const start = moment().startOf('year');
-      const end = moment().endOf('year');
-
-      const { data, error } = await supabase
-        .from('detections_log')
-        .select('created_at')
-        .eq('object_type', 'pet bottle')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
-
-      if (error) throw error;
-
-      const months = Array(12).fill(0);
-      data.forEach(entry => {
-        const month = moment(entry.created_at).month();
-        months[month]++;
-      });
-
-      setMonthlyData(months.map((value, i) => ({
-        label: moment().month(i).format('MMM'),
-        value,
-      })));
-    } catch (err) {
-      console.error('Fetch monthly error:', (err as Error).message);
+      setChartData(result);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === 'Daily') fetchDailyData(currentWeek);
-    if (activeTab === 'Weekly') fetchWeeklyData();
-    if (activeTab === 'Monthly') fetchMonthlyData();
+    fetchData(); // initial load
+
+    const channel = supabase
+      .channel('pet-bottle-detections')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'detections_log',
+          filter: 'object_type=eq.pet bottle',
+        },
+        (payload) => {
+          console.log('New pet bottle detection:', payload);
+          fetchData(); // refresh chart
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel); // cleanup
+    };
   }, [activeTab, currentWeek]);
 
-  const chartStyles = {
-    Daily: { barWidth: 30, spacing: 18, frontColor: '#4CAF50' },
-    Weekly: { barWidth: 40, spacing: 25, frontColor: '#2196F3' },
-    Monthly: { barWidth: 50, spacing: 30, frontColor: '#FF9800' },
+  const getChartStyles = () => {
+    const common = { yAxisTextStyle: { color: 'gray' }, yAxisLabelWidth: 30 };
+    switch (activeTab) {
+      case 'Daily': return { ...common, barWidth: 30, spacing: 18, frontColor: '#4CAF50' };
+      case 'Weekly': return { ...common, barWidth: 40, spacing: 25, frontColor: '#2196F3' };
+      case 'Monthly': return { ...common, barWidth: 40, spacing: 20, frontColor: '#FF9800' };
+      case 'Yearly': return { ...common, barWidth: 45, spacing: 20, frontColor: '#9C27B0' };
+      default: return common;
+    }
   };
-
-  const chartData =
-    activeTab === 'Daily' ? dailyData :
-    activeTab === 'Weekly' ? weeklyData :
-    monthlyData;
 
   return (
     <View style={styles.container}>
       <View style={styles.tabBar}>
-        {['Daily', 'Weekly', 'Monthly'].map(tab => (
+        {['Daily', 'Weekly', 'Monthly', 'Yearly'].map(tab => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab as typeof activeTab)}
+            onPress={() => {
+              setActiveTab(tab as typeof activeTab);
+              setCurrentWeek(0); // reset week
+            }}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
               {tab}
@@ -146,9 +144,6 @@ const PetBottleBarChart = () => {
         ))}
       </View>
 
-      <Text style={styles.title}>Pet Bottle Collection ({activeTab})</Text>
-
-      {/* Week Selector for Daily Tab */}
       {activeTab === 'Daily' && (
         <View style={styles.weekSelector}>
           <TouchableOpacity onPress={() => setCurrentWeek(prev => prev - 1)}>
@@ -167,17 +162,19 @@ const PetBottleBarChart = () => {
         </View>
       )}
 
+      <Text style={styles.title}>Pet Bottle Collection ({activeTab})</Text>
+
       {loading ? (
-        <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 20 }} />
+        <ActivityIndicator size="large" color="#4CAF50" />
       ) : (
         <BarChart
           data={chartData}
-          {...chartStyles[activeTab]}
+          {...getChartStyles()}
           yAxisThickness={1}
           xAxisThickness={1}
           hideRules={false}
           noOfSections={4}
-          maxValue={Math.max(...chartData.map(item => item.value), 0)} // Ensure it doesn't add 1 if no data
+          maxValue={Math.max(...chartData.map(item => item.value), 10)}
         />
       )}
     </View>

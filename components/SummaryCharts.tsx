@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -166,6 +167,15 @@ const SummaryCharts: React.FC = () => {
     fetchAllData();
   }, [range, currentWeek]);
 
+  // Calculate chart width based on number of data points
+  const calculateChartWidth = () => {
+    if (!chartData) return screenWidth - 70;
+    const minWidth = screenWidth - 70;
+    const pointWidth = 60; // Width per data point
+    const calculatedWidth = chartData.labels.length * pointWidth;
+    return Math.max(calculatedWidth, minWidth);
+  };
+
   return (
     <LinearGradient colors={['#4facfe', '#00f2fe']} style={styles.gradient}>
       <View style={styles.container}>
@@ -203,24 +213,35 @@ const SummaryCharts: React.FC = () => {
               <ActivityIndicator size="large" color="#000" />
             </View>
           ) : (
-            <LineChart
-              data={chartData}
-              width={screenWidth - 70}
-              height={320}
-              chartConfig={{
-                backgroundGradientFrom: '#fff',
-                backgroundGradientTo: '#fff',
-                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                propsForDots: {
-                  r: '5',
-                  strokeWidth: '2',
-                  stroke: '#000',
-                },
-              }}
-              bezier
-              style={styles.chart}
-            />
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={true}
+              contentContainerStyle={styles.scrollViewContent}
+            >
+              <LineChart
+                data={chartData}
+                width={calculateChartWidth()}
+                height={320}
+                chartConfig={{
+                  backgroundGradientFrom: '#fff',
+                  backgroundGradientTo: '#fff',
+                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  propsForDots: {
+                    r: '5',
+                    strokeWidth: '2',
+                    stroke: '#000',
+                  },
+                }}
+                bezier
+                style={styles.chart}
+                fromZero
+                withHorizontalLabels={true}
+                segments={chartData.labels.length > 10 ? 4 : 5}
+                xLabelsOffset={-10}
+                yLabelsOffset={10}
+              />
+            </ScrollView>
           )}
         </View>
 
@@ -277,7 +298,7 @@ const styles = StyleSheet.create({
     borderColor: '#000',
   },
   tabText: {
-    fontSize: 16,
+    fontSize: 13,
     color: 'gray',
   },
   activeTabText: {
@@ -305,6 +326,9 @@ const styles = StyleSheet.create({
     height: 340,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  scrollViewContent: {
+    paddingRight: 20,
   },
   loadingContainer: {
     flex: 1,

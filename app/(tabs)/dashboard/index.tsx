@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/utils/supabase';
 import SummaryCharts from '@/components/SummaryCharts';
 import { Ionicons } from '@expo/vector-icons'; // Add this import
+import TimeSummary from '@/components/TimeSummary';
 
 type BinCardProps = {
   objectType: string;
@@ -134,6 +135,7 @@ export default function RecyclingBinsScreen() {
         />
       </LinearGradient>
       <SummaryCharts />
+      <TimeSummary />
     </ScrollView>
   );
 }
