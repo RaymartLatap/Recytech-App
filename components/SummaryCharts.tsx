@@ -15,6 +15,7 @@ import { fetchGroupedCounts } from '@/utils/fetchGroupedCounts';
 import { downloadCSV } from '@/utils/downloadCSV';
 import { supabase } from '@/utils/supabase';
 import moment from 'moment';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -61,7 +62,6 @@ const SummaryCharts: React.FC = () => {
             strokeWidth: 2,
           },
         ],
-        legend: ['Paper', 'Can', 'PET Bottles'],
       });
     } catch (error) {
       console.error('Error fetching chart data:', error);
@@ -103,11 +103,6 @@ const SummaryCharts: React.FC = () => {
         return;
       }
   
-      if (!data || data.length === 0) {
-        Alert.alert('No Data', 'No records found for this range.');
-        return;
-      }
-  
       const activeTab = rangeLabels[range];
   
       const groupFn = {
@@ -128,20 +123,58 @@ const SummaryCharts: React.FC = () => {
           moment(d.created_at).format('YYYY'),
       }[activeTab];
   
-      const grouped: Record<string, { label: string; paper: number; can: number; 'pet bottle': number }> = {};
+      // First create all possible groups for the range
+      const allGroups: Record<string, { label: string; paper: number; can: number; 'pet bottle': number }> = {};
+      
+      if (range === 'daily') {
+        // For daily, create entries for each day in the week
+        const currentDate = start.clone();
+        while (currentDate.isSameOrBefore(end)) {
+          const dateStr = currentDate.format('YYYY-MM-DD');
+          allGroups[dateStr] = { label: dateStr, paper: 0, can: 0, 'pet bottle': 0 };
+          currentDate.add(1, 'day');
+        }
+      } else if (range === 'weekly') {
+        // For weekly, create entries for each week in the month
+        const currentWeekStart = start.clone().startOf('isoWeek');
+        const monthEnd = end.clone();
+        while (currentWeekStart.isSameOrBefore(monthEnd, 'month')) {
+          const weekStart = currentWeekStart.format('YYYY-MM-DD');
+          const weekEnd = currentWeekStart.clone().endOf('isoWeek').format('YYYY-MM-DD');
+          const weekLabel = `${weekStart} to ${weekEnd}`;
+          allGroups[weekLabel] = { label: weekLabel, paper: 0, can: 0, 'pet bottle': 0 };
+          currentWeekStart.add(1, 'week');
+        }
+      } else if (range === 'monthly') {
+        // For monthly, create entries for each month in the year
+        const currentMonth = start.clone();
+        while (currentMonth.isSameOrBefore(end, 'year')) {
+          const monthLabel = currentMonth.format('YYYY-MM');
+          allGroups[monthLabel] = { label: monthLabel, paper: 0, can: 0, 'pet bottle': 0 };
+          currentMonth.add(1, 'month');
+        }
+      } else {
+        // For yearly, create entries for each year from start to end
+        const currentYear = start.clone();
+        while (currentYear.isSameOrBefore(end, 'year')) {
+          const yearLabel = currentYear.format('YYYY');
+          allGroups[yearLabel] = { label: yearLabel, paper: 0, can: 0, 'pet bottle': 0 };
+          currentYear.add(1, 'year');
+        }
+      }
   
+      // Now populate the data we have
       data.forEach(entry => {
         if (!groupFn) throw new Error(`Invalid activeTab: ${activeTab}`);
         const group = groupFn(entry);
         const type = entry.object_type as 'paper' | 'can' | 'pet bottle';
   
-        if (!grouped[group]) {
-          grouped[group] = { label: group, paper: 0, can: 0, 'pet bottle': 0 };
+        if (allGroups[group]) {
+          allGroups[group][type]++;
         }
-        grouped[group][type]++;
       });
   
-      const csvData = Object.values(grouped);
+      const csvData = Object.values(allGroups);
       await downloadCSV(csvData, 'combined_bins', range);
     } catch (err) {
       console.error('Download error:', err);
@@ -197,12 +230,18 @@ const SummaryCharts: React.FC = () => {
 
         {range === 'daily' && (
           <View style={styles.weekNav}>
-            <TouchableOpacity onPress={() => handleWeekNavigation('prev')}>
-              <Text style={styles.weekNavText}>{'<'}</Text>
+            <TouchableOpacity 
+              onPress={() => handleWeekNavigation('prev')}
+              style={styles.navButton}
+            >
+              <MaterialIcons name="chevron-left" size={28} color="black" />
             </TouchableOpacity>
             <Text style={styles.currentWeekText}>{getWeekRange(currentWeek)}</Text>
-            <TouchableOpacity onPress={() => handleWeekNavigation('next')}>
-              <Text style={styles.weekNavText}>{'>'}</Text>
+            <TouchableOpacity 
+              onPress={() => handleWeekNavigation('next')}
+              style={styles.navButton}
+            >
+              <MaterialIcons name="chevron-right" size={28} color="black" />
             </TouchableOpacity>
           </View>
         )}
@@ -210,43 +249,75 @@ const SummaryCharts: React.FC = () => {
         <View style={styles.chartWrapper}>
           {loading || !chartData ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#000" />
+              <ActivityIndicator size="large" color="#black" />
+              <Text style={styles.loadingText}>Loading data...</Text>
             </View>
           ) : (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={true}
-              contentContainerStyle={styles.scrollViewContent}
-            >
-              <LineChart
-                data={chartData}
-                width={calculateChartWidth()}
-                height={320}
-                chartConfig={{
-                  backgroundGradientFrom: '#fff',
-                  backgroundGradientTo: '#fff',
-                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                  propsForDots: {
-                    r: '5',
-                    strokeWidth: '2',
-                    stroke: '#000',
-                  },
-                }}
-                bezier
-                style={styles.chart}
-                fromZero
-                withHorizontalLabels={true}
-                segments={chartData.labels.length > 10 ? 4 : 5}
-                xLabelsOffset={-10}
-                yLabelsOffset={10}
-              />
-            </ScrollView>
+            <>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.scrollViewContent}
+              >
+                <LineChart
+                  data={chartData}
+                  width={calculateChartWidth()}
+                  height={440}
+                  chartConfig={{
+                    backgroundColor: '#ffffff',
+                    backgroundGradientFrom: '#ffffff',
+                    backgroundGradientTo: '#ffffff',
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    style: {
+                      borderRadius: 16,
+                    },
+                    propsForDots: {
+                      r: '5',
+                      strokeWidth: '2',
+                      stroke: '#ffffff',
+                    },
+                    propsForLabels: {
+                      fontSize: 11,
+                    },
+                  }}
+                  bezier
+                  style={styles.chart}
+                  fromZero
+                  withHorizontalLabels={true}
+                  segments={chartData.labels.length > 10 ? 4 : 5}
+                  xLabelsOffset={-10}
+                  yLabelsOffset={10}
+                />
+              </ScrollView>
+              <View style={styles.legendContainer}>
+                {['Paper', 'Can', 'PET Bottles'].map((item, index) => (
+                  <View key={item} style={styles.legendItem}>
+                    <View 
+                      style={[
+                        styles.legendColor, 
+                        { 
+                          backgroundColor: chartData.datasets[index].color(1),
+                          borderColor: '#fff',
+                        }
+                      ]} 
+                    />
+                    <Text style={[styles.legendText, { color: 'black' }]}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
           )}
         </View>
 
-        <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadCSV}>
-          <Text style={styles.downloadText}>Download All as CSV</Text>
+        <TouchableOpacity 
+          style={[styles.downloadButton, { backgroundColor: 'black' }]} 
+          onPress={handleDownloadCSV}
+          disabled={loading}
+        >
+          <MaterialIcons name="file-download" size={20} color="#4facfe" />
+          <Text style={[styles.downloadText, { color: 'white' }]}>Download as CSV</Text>
         </TouchableOpacity>
       </View>
     </LinearGradient>
@@ -270,15 +341,15 @@ const styles = StyleSheet.create({
   },
   gradient: {
     flex: 1,
+    padding: 16,
     marginTop: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 24,
     borderRadius: 12,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     textAlign: 'center',
+    color: 'black',
     marginBottom: 16,
   },
   tabBar: {
@@ -286,7 +357,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     paddingBottom: 6,
   },
   tab: {
@@ -295,37 +366,37 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderColor: '#000',
+    borderColor: 'black',
   },
   tabText: {
-    fontSize: 13,
-    color: 'gray',
+    fontSize: 14,
+    color: 'rgba(83, 77, 77, 0.7)',
   },
   activeTabText: {
-    fontSize: 16,
-    color: '#000',
+    fontSize: 13,
+    color: 'black',
     fontWeight: 'bold',
   },
   weekNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
-    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  weekNavText: {
-    fontSize: 24,
-    color: '#000',
-    fontWeight: '600',
+  navButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(14, 11, 11, 0.2)',
   },
   currentWeekText: {
     fontSize: 16,
-    color: '#000',
+    color: 'black',
     fontWeight: '600',
   },
   chartWrapper: {
-    height: 340,
+    height: 420,
     justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: 16,
   },
   scrollViewContent: {
     paddingRight: 20,
@@ -335,21 +406,59 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: 'black',
+  },
   chart: {
-    borderRadius: 8,
-    alignSelf: 'center',
+    borderRadius: 12,
+    paddingRight: 30,
+    marginTop: 5,
   },
   downloadButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    backgroundColor: '#000',
-    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   downloadText: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    paddingHorizontal: 20,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+    marginVertical: 4,
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    marginRight: 6,
+    borderWidth: 1,
+  },
+  legendText: {
+    fontSize: 11,
+    color: 'black',
   },
 });
 

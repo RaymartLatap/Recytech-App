@@ -9,7 +9,7 @@ export async function downloadCSV(data: any[], fileName: string, range: string) 
     return;
   }
 
-  const csvHeader = 'Month/Day/Year,PAPER,CAN,PET BOTTLE';
+  const csvHeader = 'TIME,PAPER,CAN,PET BOTTLE';
 
   const csvRows = data.map(row => {
     let dateLabel = row.label;

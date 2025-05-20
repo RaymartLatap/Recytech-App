@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
-import { downloadCSV } from '@/utils/downloadCSV';
+import { downloadCSV } from '@/utils/downloadCSVHourly';
 import { supabase } from '@/utils/supabase';
 import moment from 'moment';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
 const chartWidth = screenWidth * 1.5; // Increased width for scrolling
@@ -111,28 +112,40 @@ const TimeSummary: React.FC = () => {
         return;
       }
   
-      const grouped: Record<string, { label: string; paper: number; can: number; pet: number }> = {};
+      // Define the grouping function for hourly data
+      const groupFn = (entry: { created_at: moment.MomentInput }) => 
+        moment(entry.created_at).format('h A');
   
+      const grouped: Record<string, { 
+        label: string; 
+        paper: number; 
+        can: number; 
+        'pet bottle': number 
+      }> = {};
+  
+      // Initialize all hours from 7 AM to 9 PM
       for (let hour = 7; hour <= 21; hour++) {
         const hourStr = moment().hour(hour).minute(0).format('h A');
-        grouped[hourStr] = { label: hourStr, paper: 0, can: 0, pet: 0 };
+        grouped[hourStr] = { label: hourStr, paper: 0, can: 0, 'pet bottle': 0 };
       }
   
+      // Populate with actual data
       data.forEach(entry => {
-        const hour = moment(entry.created_at).format('h A');
+        const group = groupFn(entry);
         const type = entry.object_type as 'paper' | 'can' | 'pet bottle';
   
-        if (!grouped[hour]) {
-          grouped[hour] = { label: hour, paper: 0, can: 0, pet: 0 };
+        if (!grouped[group]) {
+          grouped[group] = { label: group, paper: 0, can: 0, 'pet bottle': 0 };
         }
-  
-        if (type === 'paper') grouped[hour].paper++;
-        if (type === 'can') grouped[hour].can++;
-        if (type === 'pet bottle') grouped[hour].pet++;
+        grouped[group][type]++;
       });
   
-      const csvData = Object.values(grouped);
-      const formattedDate = selectedDate.format('MMMM-D-YYYY'); // Format: Month-Day-Year
+      // Convert to array and sort by time
+      const csvData = Object.values(grouped).sort((a, b) => {
+        return moment(a.label, 'h A').valueOf() - moment(b.label, 'h A').valueOf();
+      });
+  
+      const formattedDate = selectedDate.format('MMMM-D-YYYY');
       await downloadCSV(csvData, `${formattedDate}_Hourly_Collection`, 'hourly');
     } catch (err) {
       console.error('Download error:', err);
@@ -154,64 +167,107 @@ const TimeSummary: React.FC = () => {
   return (
     <LinearGradient colors={['#4facfe', '#00f2fe']} style={styles.gradient}>
       <View style={styles.container}>
-        <Text style={styles.title}>Hourly Collection Summary (7am - 9pm)</Text>
+        <Text style={styles.title}>Hourly Collection Summary</Text>
+        <Text style={styles.subtitle}>7:00 AM - 9:00 PM</Text>
 
         <View style={styles.dateNav}>
-          <TouchableOpacity onPress={() => handleDateNavigation('prev')}>
-            <Text style={styles.navText}>{'<'}</Text>
+          <TouchableOpacity 
+            onPress={() => handleDateNavigation('prev')}
+            style={styles.navButton}
+          >
+            <MaterialIcons name="chevron-left" size={28} color="black" />
           </TouchableOpacity>
-          <Text style={styles.dateText}>{selectedDate.format('MMMM D, YYYY')}</Text>
-          <TouchableOpacity onPress={() => handleDateNavigation('next')}>
-            <Text style={styles.navText}>{'>'}</Text>
+          
+          <View style={styles.dateContainer}>
+            <Text style={styles.dateText}>{selectedDate.format('MMMM D, YYYY')}</Text>
+          </View>
+          
+          <TouchableOpacity 
+            onPress={() => handleDateNavigation('next')}
+            style={styles.navButton}
+          >
+            <MaterialIcons name="chevron-right" size={28} color="black" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.chartWrapper}>
           {loading || !chartData ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#000" />
+              <ActivityIndicator size="large" color="#fff" />
+              <Text style={styles.loadingText}>Loading data...</Text>
             </View>
           ) : (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={true}
-              contentContainerStyle={styles.scrollViewContent}
-            >
-              <LineChart
-                data={chartData}
-                width={chartWidth}
-                height={320}
-                chartConfig={{
-                  backgroundGradientFrom: '#fff',
-                  backgroundGradientTo: '#fff',
-                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                  propsForDots: {
-                    r: '5',
-                    strokeWidth: '2',
-                    stroke: '#000',
-                  },
-                  propsForLabels: {
-                    fontSize: 10,
-                  },
-                }}
-                bezier
-                style={styles.chart}
-                withHorizontalLabels={true}
-                withVerticalLabels={true}
-                segments={4}
-                formatYLabel={(value) => `${Math.round(Number(value))}`}
-                fromZero={true}
-                verticalLabelRotation={-45}
-                xLabelsOffset={-10}
-                yLabelsOffset={10}
-              />
-            </ScrollView>
+            <>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.scrollViewContent}
+              >
+                <LineChart
+                  data={{
+                    labels: chartData.labels,
+                    datasets: chartData.datasets,
+                  }}
+                  width={chartWidth}
+                  height={390}
+                  chartConfig={{
+                    backgroundColor: '#ffffff',
+                    backgroundGradientFrom: '#ffffff',
+                    backgroundGradientTo: '#ffffff',
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    style: {
+                      borderRadius: 16,
+                    },
+                    propsForDots: {
+                      r: '5',
+                      strokeWidth: '2',
+                      stroke: '#ffffff',
+                    },
+                    propsForLabels: {
+                      fontSize: 11,
+                    },
+                  }}
+                  bezier
+                  style={styles.chart}
+                  withHorizontalLabels={true}
+                  withVerticalLabels={true}
+                  segments={4}
+                  formatYLabel={(value) => `${Math.round(Number(value))}`}
+                  fromZero={true}
+                  verticalLabelRotation={-45}
+                  xLabelsOffset={-10}
+                  yLabelsOffset={10}
+                />
+              </ScrollView>
+              <View style={styles.legendContainer}>
+                {['Paper', 'Can', 'PET Bottles'].map((item, index) => (
+                  <View key={item} style={styles.legendItem}>
+                    <View 
+                      style={[
+                        styles.legendColor, 
+                        { 
+                          backgroundColor: chartData.datasets[index].color(1),
+                          borderColor: '#fff',
+                        }
+                      ]} 
+                    />
+                    <Text style={[styles.legendText, { color: 'black' }]}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
           )}
         </View>
 
-        <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadCSV}>
-          <Text style={styles.downloadText}>Download Hourly Data as CSV</Text>
+        <TouchableOpacity 
+          style={[styles.downloadButton, { backgroundColor: 'black' }]} 
+          onPress={handleDownloadCSV}
+          disabled={loading}
+        >
+          <MaterialIcons name="file-download" size={20} color="#4facfe" />
+          <Text style={[styles.downloadText, { color: 'white' }]}>Download Hourly Data</Text>
         </TouchableOpacity>
       </View>
     </LinearGradient>
@@ -241,60 +297,104 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 10,
+    color: 'black',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    color: 'black',
+    marginBottom: 20,
   },
   dateNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  navText: {
-    fontSize: 24,
-    color: '#000',
-    fontWeight: '600',
-    paddingHorizontal: 20,
+  navButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(23, 17, 17, 0.2)',
+  },
+  dateContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   dateText: {
-    fontSize: 16,
-    color: '#000',
+    fontSize: 18,
     fontWeight: '600',
-    paddingHorizontal: 10,
+    color: 'black',
   },
   chartWrapper: {
-    height: 340,
+    height: 380,
     justifyContent: 'center',
+    marginBottom: 16,
   },
   scrollViewContent: {
-    alignItems: 'center',
+    paddingBottom: 10,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: 'black',
+  },
   chart: {
-    borderRadius: 8,
-    marginHorizontal: 10,
+    borderRadius: 12,
+    paddingRight: 30,
+    marginTop: 10,
   },
   downloadButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    backgroundColor: '#000',
-    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   downloadText: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
-    paddingHorizontal: 10,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    paddingHorizontal: 20,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+    marginVertical: 4,
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    marginRight: 6,
+    borderWidth: 1,
+  },
+  legendText: {
+    fontSize: 11,
   },
 });
 
